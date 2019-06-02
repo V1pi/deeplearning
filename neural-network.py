@@ -18,18 +18,7 @@ class Network(object):
         self.__weights = [np.random.randn(y,x) for x,y in zip(sizes[:-1], sizes[1:])]
     
     def feedforward(self, a):
-        # idx = 0
-        # print("LISTA a: ", list(a))
-        # for aux in list(a):
-        #     aux = np.transpose([aux])
-        #     print("aux: ", aux)
-        #     for b,w in zip(self.biases, self.weights):
-        #         aux = sigmoid(np.dot(w, aux)+b)
-        #     a[idx] = aux
-        #     idx+=1
         neurons = []
-        # print("weights: ", self.weights)
-        # print("bias: ", self.biases)
         for b,w in zip(self.biases, self.weights):
             a = sigmoid(np.dot(w, a)+b)
             neurons.append(a)
@@ -51,87 +40,73 @@ class Network(object):
         for count in range(0, epochs):
             aux_error = []
             for inputs, correct in zip(input_data, correct_data):
-                inputs = np.array([inputs]).T
-                correct = np.array([correct]).T
-                
-                # print("correct ", correct)
-                neurons = self.feedforward(inputs)
-                result = neurons[-1]
-                
-                neurons.pop(-1)
-                neurons.insert(0,inputs)
-                
-                nabla_w = []
-                nabla_b = []
-                
-                # print("neurons", neurons)
-                # print("result", result)
-                error = result - correct
-                # aux_error += error[0][0]*error[0][0]
-                aux_error.append(list(map(lambda x: np.square(x) , error)))
-                aux = error * result * (1-result)
-                # print("aux_error ", aux_error)
-                # print("error ", error)
-                
-                
-                
-                for n, w, b in zip(neurons[::-1], self.weights[::-1], self.__biases[::-1]):
-                    # Atualiza os bias
-                    # print("bias ", aux)
-                    nabla_b.append(aux)
-                    # print("neurons_layer ", n)
-                    # print("neurons ", n)
-                    aux = np.dot(n, aux.T)
-                    
-                    # Atualiza os pesos
-                    nabla_w.append(aux)
-                    
-                    # print("pesos ", aux)
-                    aux = aux * w.T
-                    aux = np.array([aux.sum(axis=1)]).T
-                    # print("Soma dos pesos ", aux)
-                    aux = aux * n * (1 - n)
-                    
-                    # print("aux ", aux)
-                    # aux = aux * n * (1-n)
-                    
-                    # aux = aux * w.transpose()
-                    
-                    # aux = np.array([aux.sum(axis=1)])
-                    # print("n ", n)
-                    # print("w ", w)
-                    # print("b ", b)
-                # print("Nabla_b", nabla_b)
-                # print("Nabla_w", nabla_w)
-                new_weights = []
-                new_biases = []
-                for delta_w, delta_b, w, b in zip(nabla_w[::-1], nabla_b[::-1], self.weights, self.biases):
-                    # print("bias ", b)
-                    # print("delta_bias ", delta_b)
-                    # print("weights ", w)
-                    # print("delta_weights ", delta_w)
-                    new_weights.append(w-delta_w.T*eta)
-                    new_biases.append(b-delta_b*eta) #Removi a transposta talvez de merda
-                # print("old_bias ", self.biases)
-                # print("new_boas ", new_biases)
-                self.__biases = new_biases
-                self.__weights = new_weights
-                # break
+                self.update_mini_batch(inputs, correct, aux_error, eta)
             
-            # print("Soma ", reduce(lambda x,y : [np.sum(w+z/len(input_data)) for w,z in zip(x,y)], aux_error))
             erros.append(reduce(lambda x,y : [np.sum(w+z/len(input_data)) for w,z in zip(x,y)], aux_error))
-            # print("erros ", erros)
-            # erros.append(aux_error/len(input_data))
-            # break
-        print("Erros: ", 1)
+        
+        self.plotResults(epochs, erros)
+    
+    def plotResults(self, epochs, erros):
         fig, ax = plt.subplots()  
         ax.plot(np.arange(epochs), erros, 'r')  
         ax.set_xlabel('Iterações')  
         ax.set_ylabel('Custo')  
         ax.set_title('MSE vs. Epoch')
         plt.show()
+    
+    def update_mini_batch(self, inputs, correct, error, eta):
+        nabla_w, nabla_b = self.backprop(inputs, correct, error)
+        new_weights = []
+        new_biases = []
         
+        for delta_w, delta_b, w, b in zip(nabla_w[::-1], nabla_b[::-1], self.weights, self.biases):
+            new_weights.append(w-delta_w.T*eta)
+            new_biases.append(b-delta_b*eta) #Removi a transposta talvez de merda
+        self.__biases = new_biases
+        self.__weights = new_weights
+    
+    def backprop(self, inputs, correct, error):
+        inputs = np.array([inputs]).T
+        correct = np.array([correct]).T
+        
+        # print("correct ", correct)
+        neurons = self.feedforward(inputs)
+        result = neurons[-1]
+        
+        neurons.pop(-1)
+        neurons.insert(0,inputs)
+        
+        nabla_w = []
+        nabla_b = []
+        
+        error.append(self.cost(result, correct))
+        aux = self.cost_derivation(result, correct) * self.function_prime(result)      
+        
+        for n, w, b in zip(neurons[::-1], self.weights[::-1], self.__biases[::-1]):
+            # Atualiza os bias
+            nabla_b.append(aux)
+            aux = np.dot(n, aux.T)
             
+            # Atualiza os pesos
+            nabla_w.append(aux)
+            
+            aux = aux * w.T
+            aux = np.array([aux.sum(axis=1)]).T
+            aux = aux * self.function_prime(n)
+        return nabla_w, nabla_b
+    
+    # FUNÇÃO DE CUSTO A SER UTILIZADA
+    def cost(self, result, correct):
+        difference = result - correct
+        return list(map(lambda x: np.square(x) , difference))
+    
+    # DERIVADA DA FUNÇÃO DE CUSTO
+    def cost_derivation(self, result, correct):
+        return result-correct
+
+    # DERIVADA DA FUNÇÃO DE ATIVAÇÃO
+    def function_prime(self, g_x):
+        return g_x * (1 - g_x)
         
 
     @property
@@ -148,6 +123,6 @@ class Network(object):
         return self.__weights
 
 
-net = Network([4,1,1])
-net.SGB([[[0,0,0,0],[0,1,0,0], [1,0,0,0], [1,1,0,0]], [[1], [0], [0], [1]]], 5000, 0.5)
+net = Network([4,10,2])
+net.SGB([[[0,0,0,0],[0,1,0,0], [1,0,0,0], [1,1,0,0]], [[1,1], [0,0], [0,0], [1,1]]], 5000, 0.5)
 # net.SGB([[[0],[1]], [[1,1], [0,0]]], 5000, 0.5)
